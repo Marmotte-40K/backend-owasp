@@ -11,6 +11,11 @@ services:
       - default
     # volumes:
     #   - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: pg_isready -U ${DB_USER} -d ${DB_DATABASE}
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   app:
     build:
@@ -20,7 +25,8 @@ services:
     ports:
       - ${PORT}:8080
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy 
     networks:
       - default
 
