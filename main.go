@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Marmotte-40K/backend-owasp/handlers"
 	"github.com/Marmotte-40K/backend-owasp/routes"
+	"github.com/Marmotte-40K/backend-owasp/services"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -35,6 +37,9 @@ func main() {
 
 	defer pool.Close()
 
+	userService := services.NewUserService(pool)
+	authHandler := handlers.NewAuthHandler(userService)
+
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Service online",
@@ -42,7 +47,7 @@ func main() {
 	})
 
 	v1 := router.Group("/v1")
-	routes.AddAuthRoutes(v1)
+	routes.AddAuthRoutes(v1, authHandler)
 
 	router.Run()
 }

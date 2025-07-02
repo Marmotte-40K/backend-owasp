@@ -1,23 +1,14 @@
 package routes
 
 import (
-	"net/http"
-
+	"github.com/Marmotte-40K/backend-owasp/handlers"
 	"github.com/gin-gonic/gin"
 )
 
-func AddAuthRoutes(rg *gin.RouterGroup) {
+func AddAuthRoutes(rg *gin.RouterGroup, h *handlers.AuthHandler) {
 	auth := rg.Group("/auth")
 
-	auth.POST("/register", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "User registered successfully",
-		})
-	})
+	auth.POST("/register", h.Register)
 
-	auth.POST("/login", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Login successful",
-		})
-	})
+	auth.POST("/login", h.Login)
 }
