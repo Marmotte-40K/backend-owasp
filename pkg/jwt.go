@@ -9,7 +9,7 @@ import (
 var secretKey = []byte(os.Getenv("SECRET_KEY"))
 
 func CreateToken(email string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"email": email, "exp": time.Now().Add(time.Hour * 72).Unix()})
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"email": email, "exp": time.Now().Add(15 * time.Minute).Unix()})
 
 	tokenString, err := token.SignedString(secretKey)
 	if err != nil {

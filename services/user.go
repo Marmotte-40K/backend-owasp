@@ -36,7 +36,7 @@ func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.Us
 func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 
-	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Password, &user.Email)
+	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models
 func (s *UserService) CreateUser(ctx context.Context, user *models.User) (*models.User, error) {
 	var userNew models.User
 
-	err := s.db.QueryRow(ctx, "INSERT INTO users (name, surname, password, email) VALUES ($1, $2) RETURNING id, name, email", user.Name, user.Surname, user.Password, user.Email).Scan(&userNew.ID, &userNew.Name, &userNew.Password, &userNew.Email)
+	err := s.db.QueryRow(ctx, "INSERT INTO users (name, surname, password, email) VALUES ($1, $2, $3, $4) RETURNING id, name, email", user.Name, user.Surname, user.Password, user.Email).Scan(&userNew.ID, &userNew.Name, &userNew.Email)
 	if err != nil {
 		return nil, err
 	}
