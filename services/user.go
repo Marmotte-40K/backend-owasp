@@ -2,10 +2,7 @@ package services
 
 import (
 	"context"
-	"fmt"
-
 	"github.com/Marmotte-40K/backend-owasp/models"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,9 +21,6 @@ func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.Us
 
 	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email)
 	if err != nil {
-		if err == pgx.ErrNoRows {
-			return nil, fmt.Errorf("user with ID %d not found", userID)
-		}
 		return nil, err
 	}
 	return &user, nil

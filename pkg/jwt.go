@@ -3,13 +3,12 @@ package pkg
 import (
 	"github.com/golang-jwt/jwt/v5"
 	"os"
-	"time"
 )
 
 var secretKey = []byte(os.Getenv("SECRET_KEY"))
 
-func CreateToken(email string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"email": email, "exp": time.Now().Add(15 * time.Minute).Unix()})
+func CreateToken(email string, exp int64) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"email": email, "exp": exp})
 
 	tokenString, err := token.SignedString(secretKey)
 	if err != nil {

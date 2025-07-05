@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
 	"net/http"
+	"time"
 )
 
 type AuthHandler struct {
@@ -44,15 +45,20 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.CreateToken(user.Email)
+	token, err := pkg.CreateToken(user.Email, time.Now().Add(15*time.Minute).Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+	refreshToken, err := pkg.CreateToken(user.Email, time.Now().Add(time.Hour*24*7).Unix())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+	}
 
 	c.JSON(200, gin.H{
-		"message": "Login successful",
-		"token":   token,
+		"message":       "Login successful",
+		"token":         token,
+		"refresh_token": refreshToken,
 	})
 }
 
@@ -83,15 +89,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.CreateToken(user.Email)
+	token, err := pkg.CreateToken(user.Email, time.Now().Add(15*time.Minute).Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
+	refreshToken, err := pkg.CreateToken(user.Email, time.Now().Add(time.Hour*24*7).Unix())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+	}
+
 	c.JSON(200, gin.H{
-		"message": "Registration successful",
-		"token":   token,
+		"message":       "Registration successful",
+		"token":         token,
+		"refresh_token": refreshToken,
 	})
 }
 
