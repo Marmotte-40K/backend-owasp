@@ -7,8 +7,8 @@ import (
 
 var secretKey = []byte(os.Getenv("SECRET_KEY"))
 
-func CreateToken(email string, exp int64) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"email": email, "exp": exp})
+func CreateToken(userID int, exp int64) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "exp": exp})
 
 	tokenString, err := token.SignedString(secretKey)
 	if err != nil {

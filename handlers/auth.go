@@ -47,14 +47,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.CreateToken(user.Email, time.Now().Add(15*time.Minute).Unix())
+	token, err := pkg.CreateToken(user.ID, time.Now().Add(15*time.Minute).Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
 
-	refreshToken, err := pkg.CreateToken(user.Email, expRefresh.Unix())
+	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
@@ -100,7 +100,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.CreateToken(user.Email, time.Now().Add(15*time.Minute).Unix())
+	token, err := pkg.CreateToken(user.ID, time.Now().Add(15*time.Minute).Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
@@ -108,7 +108,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
 
-	refreshToken, err := pkg.CreateToken(user.Email, expRefresh.Unix())
+	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
