@@ -11,12 +11,14 @@ import (
 )
 
 type AuthHandler struct {
-	svc *services.UserService
+	svcUser  *services.UserService
+	svcToken *services.TokenService
 }
 
-func NewAuthHandler(svc *services.UserService) *AuthHandler {
+func NewAuthHandler(svcUser *services.UserService, svcToken *services.TokenService) *AuthHandler {
 	return &AuthHandler{
-		svc: svc,
+		svcUser:  svcUser,
+		svcToken: svcToken,
 	}
 }
 
@@ -33,7 +35,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.GetUserByEmail(c, body.Email)
+	user, err := h.svcUser.GetUserByEmail(c, body.Email)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -50,12 +52,21 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	refreshToken, err := pkg.CreateToken(user.Email, time.Now().Add(time.Hour*24*7).Unix())
+	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
+
+	refreshToken, err := pkg.CreateToken(user.Email, expRefresh.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
 	}
 
-	c.JSON(200, gin.H{
+	err = h.svcToken.AddRefreshToken(c.Request.Context(), user.ID, refreshToken, expRefresh)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"message":       "Login successful",
 		"token":         token,
 		"refresh_token": refreshToken,
@@ -83,7 +94,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svc.CreateUser(c, &models.User{Name: body.Name, Surname: body.Surname, Email: body.Email, Password: string(hashed)})
+	user, err := h.svcUser.CreateUser(c, &models.User{Name: body.Name, Surname: body.Surname, Email: body.Email, Password: string(hashed)})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
@@ -95,12 +106,21 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	refreshToken, err := pkg.CreateToken(user.Email, time.Now().Add(time.Hour*24*7).Unix())
+	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
+
+	refreshToken, err := pkg.CreateToken(user.Email, expRefresh.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
 	}
 
-	c.JSON(200, gin.H{
+	err = h.svcToken.AddRefreshToken(c.Request.Context(), user.ID, refreshToken, expRefresh)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
 		"message":       "Registration successful",
 		"token":         token,
 		"refresh_token": refreshToken,
@@ -108,7 +128,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 }
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	c.JSON(200, gin.H{
+	c.JSON(http.StatusOK, gin.H{
 		"message": "Token refreshed successfully",
 	})
 }

@@ -38,7 +38,8 @@ func main() {
 	defer pool.Close()
 
 	userService := services.NewUserService(pool)
-	authHandler := handlers.NewAuthHandler(userService)
+	tokenService := services.NewTokenService(pool)
+	authHandler := handlers.NewAuthHandler(userService, tokenService)
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
