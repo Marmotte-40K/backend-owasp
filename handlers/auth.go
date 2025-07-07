@@ -36,7 +36,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	user, err := h.svcUser.GetUserByEmail(c, body.Email)
+	user, err := h.svcUser.GetUserByEmail(c.Request.Context(), body.Email)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
@@ -46,6 +46,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
+	}
+
+	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	if dbToken != "" {
+		err = h.svcToken.RemoveRefreshToken(c.Request.Context(), user.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+			return
+		}
 	}
 
 	token, err := pkg.CreateToken(user.ID, time.Now().Add(15*time.Minute).Unix())
