@@ -13,4 +13,6 @@ func AddAuthRoutes(rg *gin.RouterGroup, h *handlers.AuthHandler) {
 	auth.POST("/login", h.Login)
 
 	auth.POST("/refresh", h.RefreshToken)
+
+	auth.POST("/logout", h.Logout)
 }
