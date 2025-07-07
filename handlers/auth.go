@@ -1,13 +1,14 @@
 package handlers
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/Marmotte-40K/backend-owasp/models"
 	"github.com/Marmotte-40K/backend-owasp/pkg"
 	"github.com/Marmotte-40K/backend-owasp/services"
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"net/http"
-	"time"
 )
 
 type AuthHandler struct {
@@ -127,8 +128,49 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
+type refreshBody struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var body refreshBody
+
+	if err := c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+
+	err := pkg.ValidateToken(body.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	userID, err := pkg.GetUserIDFromToken(body.RefreshToken)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	if dbToken != body.RefreshToken {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
+		return
+	}
+
+	newToken, err := pkg.CreateToken(int(userID), time.Now().Add(15*time.Minute).Unix())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Token refreshed successfully",
+		"token":   newToken,
 	})
 }

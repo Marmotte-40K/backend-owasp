@@ -2,8 +2,9 @@ package services
 
 import (
 	"context"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type TokenService struct {
@@ -14,6 +15,16 @@ func NewTokenService(db *pgxpool.Pool) *TokenService {
 	return &TokenService{
 		db: db,
 	}
+}
+
+func (s *TokenService) GetRefreshToken(ctx context.Context, userId int) (string, error) {
+	var token string
+	err := s.db.QueryRow(ctx, "SELECT token FROM refresh_tokens WHERE user_id = $1", userId).Scan(&token)
+	if err != nil {
+		return "", err
+	}
+
+	return token, nil
 }
 
 func (s *TokenService) AddRefreshToken(ctx context.Context, userId int, token string, exp time.Time) error {
