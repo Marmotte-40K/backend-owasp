@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
@@ -22,6 +23,8 @@ func NewAuthHandler(svcUser *services.UserService, svcToken *services.TokenServi
 		svcToken: svcToken,
 	}
 }
+
+var domain = os.Getenv("DOMAIN")
 
 type loginBody struct {
 	Email    string `json:"email"  binding:"required"`
@@ -49,10 +52,11 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), user.ID)
-	if err != nil {
+	if err != nil && err.Error() != "no rows in result set" {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+
 	if dbToken != "" {
 		err = h.svcToken.RemoveRefreshToken(c.Request.Context(), user.ID)
 		if err != nil {
@@ -61,12 +65,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		}
 	}
 
-	token, err := pkg.CreateToken(user.ID, time.Now().Add(15*time.Minute).Unix())
+	expToken := time.Now().Add(15 * time.Minute)
+	token, err := pkg.CreateToken(user.ID, expToken.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
-	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
+	expRefresh := time.Now().Add(time.Hour * 24 * 7)
 
 	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
@@ -80,11 +85,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "Login successful",
-		"token":         token,
-		"refresh_token": refreshToken,
-	})
+	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
 }
 
 type registerBody struct {
@@ -114,13 +118,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	token, err := pkg.CreateToken(user.ID, time.Now().Add(15*time.Minute).Unix())
+	expToken := time.Now().Add(15 * time.Minute)
+	token, err := pkg.CreateToken(user.ID, expToken.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	var expRefresh = time.Now().Add(time.Hour * 24 * 7)
+	expRefresh := time.Now().Add(time.Hour * 24 * 7)
 
 	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
@@ -134,32 +139,26 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":       "Registration successful",
-		"token":         token,
-		"refresh_token": refreshToken,
-	})
-}
+	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
 
-type refreshBody struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
 }
 
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var body refreshBody
-
-	if err := c.ShouldBindJSON(&body); err != nil {
+	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 		return
 	}
 
-	err := pkg.ValidateToken(body.RefreshToken)
+	err = pkg.ValidateToken(refreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
-	userID, err := pkg.GetUserIDFromToken(body.RefreshToken)
+	userID, err := pkg.GetUserIDFromToken(refreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
@@ -171,36 +170,27 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 		return
 	}
 
-	if dbToken != body.RefreshToken {
+	if dbToken != refreshToken {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
-	newToken, err := pkg.CreateToken(int(userID), time.Now().Add(15*time.Minute).Unix())
+	expToken := time.Now().Add(15 * time.Minute)
+	newToken, err := pkg.CreateToken(int(userID), expToken.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message": "Token refreshed successfully",
-		"token":   newToken,
-	})
-}
+	c.SetCookie("access_token", newToken, int(expToken.Second()), "/", domain, false, true)
 
-type logoutBody struct {
-	RefreshToken string `json:"refresh_token" binding:"required"`
+	c.JSON(http.StatusOK, gin.H{"message": "Token refreshed successfully"})
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	var body logoutBody
+	refreshToken, err := c.Cookie("refresh_token")
 
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
-		return
-	}
-
-	userID, err := pkg.GetUserIDFromToken(body.RefreshToken)
+	userID, err := pkg.GetUserIDFromToken(refreshToken)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
@@ -211,6 +201,9 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
+
+	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+	c.SetCookie("access_token", "", -1, "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logout successful",
