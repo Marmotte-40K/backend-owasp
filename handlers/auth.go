@@ -27,8 +27,8 @@ func NewAuthHandler(svcUser *services.UserService, svcToken *services.TokenServi
 var domain = os.Getenv("DOMAIN")
 
 type loginBody struct {
-	Email    string `json:"email"  binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Email    string `json:"email"  binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -92,10 +92,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 type registerBody struct {
-	Name     string `json:"name" binding:"required"`
-	Surname  string `json:"surname" binding:"required"`
-	Email    string `json:"email"  binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Name     string `json:"name" binding:"required,min=2,max=50"`
+	Surname  string `json:"surname" binding:"required,min=2,max=100"`
+	Email    string `json:"email"  binding:"required,email"`
+	Password string `json:"password" binding:"required,min=8"`
 }
 
 func (h *AuthHandler) Register(c *gin.Context) {
