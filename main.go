@@ -7,7 +7,9 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/Marmotte-40K/backend-owasp/handlers"
 	"github.com/Marmotte-40K/backend-owasp/routes"
+	"github.com/Marmotte-40K/backend-owasp/services"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,7 +21,7 @@ func init() {
 	pool, err = pgxpool.New(context.Background(), fmt.Sprintf("postgres://%s:%s@%s:%s/%s", os.Getenv("DB_USER"), os.Getenv("DB_PASSWORD"), os.Getenv("DB_HOST"), os.Getenv("DB_PORT"), os.Getenv("DB_DATABASE")))
 
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to create connection pool: %v\n", err)
+		log.Fatal("Unable to create connection pool:", err)
 	}
 
 	if err := pool.Ping(context.Background()); err != nil {
@@ -35,6 +37,10 @@ func main() {
 
 	defer pool.Close()
 
+	userService := services.NewUserService(pool)
+	tokenService := services.NewTokenService(pool)
+	authHandler := handlers.NewAuthHandler(userService, tokenService)
+
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Service online",
@@ -42,7 +48,7 @@ func main() {
 	})
 
 	v1 := router.Group("/v1")
-	routes.AddAuthRoutes(v1)
+	routes.AddAuthRoutes(v1, authHandler)
 
 	router.Run()
 }
