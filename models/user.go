@@ -1,9 +1,11 @@
 package models
 
 type User struct {
-	ID       int
-	Name     string
-	Surname  string
-	Password string
-	Email    string
+	ID          int
+	Name        string
+	Surname     string
+	Password    string
+	Email       string
+	TotpSecret  string
+	TotpEnabled bool
 }
