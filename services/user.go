@@ -2,6 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base32"
+	"fmt"
+
 	"github.com/Marmotte-40K/backend-owasp/models"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -19,7 +23,8 @@ func NewUserService(db *pgxpool.Pool) *UserService {
 func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.User, error) {
 	var user models.User
 
-	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email FROM users WHERE id = $1", userID).Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email)
+	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled FROM users WHERE id = $1", userID).
+		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -30,7 +35,8 @@ func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.Us
 func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 
-	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email FROM users WHERE email = $1", email).Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email)
+	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled FROM users WHERE email = $1", email).
+		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled)
 	if err != nil {
 		return nil, err
 	}
@@ -46,4 +52,32 @@ func (s *UserService) CreateUser(ctx context.Context, user *models.User) (*model
 	}
 
 	return &userNew, nil
+}
+
+func (s *UserService) GenerateTOTPSecret() (string, error) {
+	secret := make([]byte, 20)
+	_, err := rand.Read(secret)
+	if err != nil {
+		return "", err
+	}
+	return base32.StdEncoding.EncodeToString(secret), nil
+}
+
+func (s *UserService) UpdateTOTPEnabled(ctx context.Context, userID int64, enabled bool) error {
+	_, err := s.db.Exec(ctx,
+		"UPDATE users SET totp_enabled = $1 WHERE id = $2",
+		enabled, userID)
+
+	if err != nil {
+		return fmt.Errorf("failed to update TOTP status: %w", err)
+	}
+
+	return nil
+}
+
+func (s *UserService) UpdateTOTPSecret(ctx context.Context, userID int64, secret string) error {
+	_, err := s.db.Exec(ctx,
+		"UPDATE users SET totp_secret = $1 WHERE id = $2",
+		secret, userID)
+	return err
 }

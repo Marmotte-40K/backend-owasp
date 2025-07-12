@@ -39,7 +39,9 @@ func main() {
 
 	userService := services.NewUserService(pool)
 	tokenService := services.NewTokenService(pool)
+	totpService := services.NewTOTPService(pool)
 	authHandler := handlers.NewAuthHandler(userService, tokenService)
+	totpHandler := handlers.NewTOTPHandler(totpService, userService)
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -49,6 +51,7 @@ func main() {
 
 	v1 := router.Group("/v1")
 	routes.AddAuthRoutes(v1, authHandler)
+	routes.AddUserRoutes(v1, totpHandler)
 
 	router.Run()
 }
