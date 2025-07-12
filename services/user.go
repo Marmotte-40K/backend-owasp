@@ -74,10 +74,3 @@ func (s *UserService) UpdateTOTPEnabled(ctx context.Context, userID int64, enabl
 
 	return nil
 }
-
-func (s *UserService) UpdateTOTPSecret(ctx context.Context, userID int64, secret string) error {
-	_, err := s.db.Exec(ctx,
-		"UPDATE users SET totp_secret = $1 WHERE id = $2",
-		secret, userID)
-	return err
-}

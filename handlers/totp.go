@@ -41,12 +41,18 @@ func (h *TOTPHandler) GetQRCode(c *gin.Context) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate TOTP secret"})
 			return
 		}
-		err = h.userService.UpdateTOTPSecret(c.Request.Context(), userID, secret)
+
+		err = h.totpService.SaveEncryptedTOTPSecret(int(user.ID), secret)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save TOTP secret"})
 			return
 		}
-		user.TotpSecret = secret
+
+		user, err = h.userService.GetUserByID(c.Request.Context(), userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reload user"})
+			return
+		}
 	}
 
 	response, err := h.totpService.GenerateQRCode(user, "Marmotte-40K/backend-owasp")
@@ -78,13 +84,11 @@ func (h *TOTPHandler) EnableTOTP(c *gin.Context) {
 		return
 	}
 
-	// Verify TOTP code
 	if !h.totpService.ValidateCode(req.TOTPCode, user.TotpSecret) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid TOTP code"})
 		return
 	}
 
-	// Enable TOTP
 	err = h.userService.UpdateTOTPEnabled(c.Request.Context(), userID, true)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to enable TOTP"})
