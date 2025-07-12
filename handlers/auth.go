@@ -29,6 +29,7 @@ var domain = os.Getenv("DOMAIN")
 type loginBody struct {
 	Email    string `json:"email"  binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
+	TOTPCode string `json:"totp_code,omitempty"`
 }
 
 func (h *AuthHandler) Login(c *gin.Context) {
@@ -49,6 +50,19 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
+	}
+
+	if user.TotpEnabled {
+		if body.TOTPCode == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "TOTP code required", "totp_required": true})
+			return
+		}
+
+		totpService := services.NewTOTPService(nil)
+		if !totpService.ValidateCode(body.TOTPCode, user.TotpSecret) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
+			return
+		}
 	}
 
 	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), user.ID)
@@ -189,6 +203,10 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 func (h *AuthHandler) Logout(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
 
 	userID, err := pkg.GetUserIDFromToken(refreshToken)
 	if err != nil {
