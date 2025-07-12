@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
+	"time"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -23,8 +24,8 @@ func NewUserService(db *pgxpool.Pool) *UserService {
 func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.User, error) {
 	var user models.User
 
-	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled FROM users WHERE id = $1", userID).
-		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled)
+	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled, failed_login_attempts, locked_until FROM users WHERE id = $1", userID).
+		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled, &user.FailedLoginAttempts, &user.LockedUntil)
 	if err != nil {
 		return nil, err
 	}
@@ -35,8 +36,8 @@ func (s *UserService) GetUserByID(ctx context.Context, userID int64) (*models.Us
 func (s *UserService) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	var user models.User
 
-	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled FROM users WHERE email = $1", email).
-		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled)
+	err := s.db.QueryRow(ctx, "SELECT id, name, surname, password, email, totp_secret, totp_enabled, failed_login_attempts, locked_until FROM users WHERE email = $1", email).
+		Scan(&user.ID, &user.Name, &user.Surname, &user.Password, &user.Email, &user.TotpSecret, &user.TotpEnabled, &user.FailedLoginAttempts, &user.LockedUntil)
 	if err != nil {
 		return nil, err
 	}
@@ -73,4 +74,17 @@ func (s *UserService) UpdateTOTPEnabled(ctx context.Context, userID int64, enabl
 	}
 
 	return nil
+}
+
+func (s *UserService) UpdateFailedAttemptsAndLock(ctx context.Context, userID int64, attempts int, lockUntil *time.Time) error {
+	if lockUntil != nil {
+		_, err := s.db.Exec(ctx,
+			"UPDATE users SET failed_login_attempts=$1, locked_until=$2 WHERE id=$3",
+			attempts, *lockUntil, userID)
+		return err
+	}
+	_, err := s.db.Exec(ctx,
+		"UPDATE users SET failed_login_attempts=$1, locked_until=NULL WHERE id=$2",
+		attempts, userID)
+	return err
 }

@@ -8,7 +8,7 @@ import (
 
 var secretKey = []byte(os.Getenv("SECRET_KEY"))
 
-func CreateToken(userID int, exp int64) (string, error) {
+func CreateToken(userID int64, exp int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{"sub": userID, "exp": exp})
 
 	tokenString, err := token.SignedString(secretKey)
@@ -30,7 +30,7 @@ func ValidateToken(tokenString string) error {
 	return nil
 }
 
-func GetUserIDFromToken(tokenString string) (int, error) {
+func GetUserIDFromToken(tokenString string) (int64, error) {
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 		return secretKey, nil
 	})
@@ -41,7 +41,7 @@ func GetUserIDFromToken(tokenString string) (int, error) {
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
 		if userID, ok := claims["sub"].(float64); ok {
-			return int(userID), nil
+			return int64(userID), nil
 		}
 	}
 

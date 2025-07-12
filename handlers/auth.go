@@ -47,8 +47,34 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	if user.LockedUntil != nil && user.LockedUntil.After(time.Now()) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "account locked", "locked_until": user.LockedUntil})
+		return
+	}
+
 	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		if err == bcrypt.ErrMismatchedHashAndPassword {
+			user.FailedLoginAttempts++
+			if user.FailedLoginAttempts >= 5 {
+				lockUntil := time.Now().Add(10 * time.Minute)
+				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, &lockUntil)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "account locked", "locked_until": lockUntil})
+				return
+			} else {
+				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, nil)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+				return
+			}
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
@@ -60,9 +86,32 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 		totpService := services.NewTOTPService(nil)
 		if !totpService.ValidateCode(body.TOTPCode, user.TotpSecret) {
+			user.FailedLoginAttempts++
+			if user.FailedLoginAttempts >= 5 {
+				lockUntil := time.Now().Add(10 * time.Minute)
+				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, &lockUntil)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{"error": "account locked", "locked_until": lockUntil})
+				return
+			} else {
+				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, nil)
+				if err != nil {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+					return
+				}
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
 			return
 		}
+	}
+
+	err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, 0, nil)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
 	}
 
 	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), user.ID)
@@ -190,7 +239,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	}
 
 	expToken := time.Now().Add(15 * time.Minute)
-	newToken, err := pkg.CreateToken(int(userID), expToken.Unix())
+	newToken, err := pkg.CreateToken(int64(userID), expToken.Unix())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
