@@ -53,6 +53,7 @@ func main() {
 	})
 
 	v1 := router.Group("/v1")
+	v1.Use(middleware.LogRequestResponse())
 	routes.AddAuthRoutes(v1, authHandler)
 	protectd := v1.Group("/")
 	protectd.Use(middleware.JWTAuthMiddleware())
