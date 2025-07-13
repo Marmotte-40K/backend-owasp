@@ -4,7 +4,7 @@
 
 1. **Clona il repository**
     ```sh
-    git clone <repo-url>
+    git clone https://github.com/Marmotte-40K/backend-owasp.git
     cd backend-owasp
     ```
 
