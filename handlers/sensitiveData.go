@@ -37,6 +37,34 @@ func (h *SensitiveDataHandler) SaveOrUpdate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
+
+	access_token, err := c.Cookie("access_token")
+	if err != nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userIDFromToken, err := pkg.GetUserIDFromToken(access_token)
+
+	if err != nil || userIDFromToken != userID {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip":      c.ClientIP(),
+				"user_id": userIDFromToken,
+			},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	var body bodyRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
 		pkg.LogError(
@@ -89,6 +117,34 @@ func (h *SensitiveDataHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
+
+	access_token, err := c.Cookie("access_token")
+	if err != nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userIDFromToken, err := pkg.GetUserIDFromToken(access_token)
+
+	if err != nil || userIDFromToken != userID {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip":      c.ClientIP(),
+				"user_id": userIDFromToken,
+			},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
 	data, err := h.svc.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
 		pkg.LogError(
