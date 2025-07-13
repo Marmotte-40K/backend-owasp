@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
+	"github.com/Marmotte-40K/backend-owasp/pkg"
 	"github.com/Marmotte-40K/backend-owasp/services"
 	"github.com/gin-gonic/gin"
 )
@@ -26,20 +27,48 @@ func (h *SensitiveDataHandler) SaveOrUpdate(c *gin.Context) {
 	userIDStr := c.Param("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
 	var body bodyRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
 	if body.IBAN == nil && body.FiscalCode == nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "At least one field (iban or fiscal_code) required"})
 		return
 	}
 	if err := h.svc.SaveOrUpdate(c.Request.Context(), &models.SensitiveData{UserID: userID, IBAN: body.IBAN, FiscalCode: body.FiscalCode}); err != nil {
+		pkg.LogError(
+			"SaveOrUpdateSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save sensitive data"})
 		return
 	}
@@ -50,11 +79,25 @@ func (h *SensitiveDataHandler) Get(c *gin.Context) {
 	userIDStr := c.Param("user_id")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
 	if err != nil {
+		pkg.LogError(
+			"GetSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
 		return
 	}
 	data, err := h.svc.GetByUserID(c.Request.Context(), userID)
 	if err != nil {
+		pkg.LogError(
+			"GetSensitiveData",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusNotFound, gin.H{"error": "Sensitive data not found"})
 		return
 	}
