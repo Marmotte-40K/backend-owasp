@@ -61,6 +61,7 @@ func main() {
 	protected.Use(middleware.JWTAuthMiddleware())
 	protected.GET("/auth/@me", authHandler.Me)
 	protected.POST("/auth/change-password", authHandler.ChangePassword)
+	protected.POST("/auth/2fa/setup", authHandler.Set2FAMethod)
 	routes.AddUserRoutes(protected, totpHandler, sensitiveDataHandler)
 
 	router.Run()

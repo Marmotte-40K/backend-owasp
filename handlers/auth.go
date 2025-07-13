@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
@@ -187,6 +189,24 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				}
 			}
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
+			return
+		}
+	} else if user.TwoFAMethod == "email" {
+		if body.TOTPCode == "" {
+			pkg.LogError(
+				"Email 2FA Required",
+				nil,
+				map[string]interface{}{
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email 2FA code required", "2fa_required": true})
+			return
+		}
+		// mock: accept "123456" as valid
+		if body.TOTPCode != "123456" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA code"})
 			return
 		}
 	}
@@ -673,4 +693,30 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+}
+
+func (h *AuthHandler) Set2FAMethod(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
+	access_token, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userIDFromToken, err := pkg.GetUserIDFromToken(access_token)
+
+	if err != nil || userIDFromToken != userID {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	var req struct{ Method string }
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+	// mock: skip actual 2FA setup
+	fmt.Printf("Set 2FA method for user %d to %s\n", userID, req.Method)
+	c.JSON(200, gin.H{"message": "2FA method updated"})
 }

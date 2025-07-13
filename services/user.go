@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base32"
 	"fmt"
+	mathRand "math/rand"
 	"time"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
@@ -97,4 +98,11 @@ func (s *UserService) UpdatePassword(ctx context.Context, userID int64, newPassw
 		return fmt.Errorf("failed to update password: %w", err)
 	}
 	return nil
+}
+
+func (s *UserService) GenerateEmail2FACode(userID int64) (string, error) {
+	code := fmt.Sprintf("%06d", mathRand.Intn(1000000))
+	// mock: just print/log
+	fmt.Printf("Mock email 2FA code for user %d: %s\n", userID, code)
+	return code, nil
 }

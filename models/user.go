@@ -12,4 +12,5 @@ type User struct {
 	TotpEnabled         bool
 	FailedLoginAttempts int
 	LockedUntil         *time.Time
+	TwoFAMethod         string // "email", or nil
 }
