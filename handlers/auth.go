@@ -521,3 +521,36 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 		"message": "Logout successful",
 	})
 }
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	tokenString, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userID, err := pkg.GetUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+	user, err := h.svcUser.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"Get User",
+			err,
+			map[string]interface{}{
+				"id": userID,
+				"ip": c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(200, gin.H{
+		"id":           user.ID,
+		"name":         user.Name,
+		"surname":      user.Surname,
+		"email":        user.Email,
+		"totp_enabled": user.TotpEnabled,
+	})
+}

@@ -46,7 +46,6 @@ func main() {
 	totpHandler := handlers.NewTOTPHandler(totpService, userService)
 	sensitiveDataHandler := handlers.NewSensitiveDataHandler(sensitiveDataService)
 
-
 	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/", func(c *gin.Context) {
@@ -58,9 +57,10 @@ func main() {
 	v1 := router.Group("/v1")
 	v1.Use(middleware.LogRequestResponse())
 	routes.AddAuthRoutes(v1, authHandler)
-	protectd := v1.Group("/")
-	protectd.Use(middleware.JWTAuthMiddleware())
-	routes.AddUserRoutes(protectd, totpHandler, sensitiveDataHandler)
+	protected := v1.Group("/")
+	protected.Use(middleware.JWTAuthMiddleware())
+	protected.GET("/auth/@me", authHandler.Me)
+	routes.AddUserRoutes(protected, totpHandler, sensitiveDataHandler)
 
 	router.Run()
 }
