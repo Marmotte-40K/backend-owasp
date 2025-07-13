@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var SensitiveKeys = []string{"password", "token", "iban", "fiscal_code", "totp_code"}
+var SensitiveKeys = []string{"password", "token", "iban", "fiscal_code", "totp_code", "manual_entry_key", "secret"}
 
 func MaskSensitiveData(data map[string]interface{}) map[string]interface{} {
 	masked := make(map[string]interface{})
@@ -27,11 +27,13 @@ func MaskSensitiveData(data map[string]interface{}) map[string]interface{} {
 func LogError(context string, err error, details map[string]interface{}) {
 	masked := MaskSensitiveData(details)
 	detailsJSON, _ := json.Marshal(masked)
+	log.SetOutput(GetLogWriter("error"))
 	log.Printf("[ERROR] %s: %v | details: %s", context, err, detailsJSON)
 }
 
 func LogFailedLogin(details map[string]interface{}) {
 	masked := MaskSensitiveData(details)
 	detailsJSON, _ := json.Marshal(masked)
+	log.SetOutput(GetLogWriter("failed-login"))
 	log.Printf("[FAILED LOGIN] details: %s", detailsJSON)
 }

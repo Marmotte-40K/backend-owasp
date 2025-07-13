@@ -6,6 +6,8 @@ RUN curl -L https://github.com/golang-migrate/migrate/releases/download/v4.18.3/
 
 WORKDIR /app
 
+RUN mkdir /logs
+
 COPY go.mod go.sum ./
 
 RUN go mod download

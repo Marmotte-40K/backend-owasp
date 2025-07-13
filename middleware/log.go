@@ -7,6 +7,7 @@ import (
 
 	"log"
 
+	"github.com/Marmotte-40K/backend-owasp/pkg"
 	"github.com/gin-gonic/gin"
 )
 
@@ -20,24 +21,12 @@ func LogRequestResponse() gin.HandlerFunc {
 			_ = json.NewDecoder(tee).Decode(&body)
 			c.Request.Body = io.NopCloser(&buf)
 		}
-		// Maschera dati sensibili
+
 		if body != nil {
-			if _, ok := body["password"]; ok {
-				body["password"] = "***"
-			}
-			if _, ok := body["token"]; ok {
-				body["token"] = "***"
-			}
-			if _, ok := body["iban"]; ok {
-				body["iban"] = "***"
-			}
-			if _, ok := body["fiscal_code"]; ok {
-				body["fiscal_code"] = "***"
-			}
-			if _, ok := body["totp_code"]; ok {
-				body["totp_code"] = "***"
-			}
+			body = pkg.MaskSensitiveData(body)
 		}
+
+		log.SetOutput(pkg.GetLogWriter("request-response"))
 		log.Printf("Request: %s %s Body: %+v IP: %s", c.Request.Method, c.Request.URL.Path, body, c.ClientIP())
 
 		// Cattura la response
