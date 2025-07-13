@@ -554,3 +554,106 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		"totp_enabled": user.TotpEnabled,
 	})
 }
+
+type changePasswordBody struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+	TOTPCode    string `json:"totp_code,omitempty"`
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	tokenString, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userID, err := pkg.GetUserIDFromToken(tokenString)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+	user, err := h.svcUser.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	var body changePasswordBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.OldPassword)); err != nil {
+		pkg.LogFailedLogin(map[string]interface{}{
+			"id": user.ID, "email": user.Email, "ip": c.ClientIP(),
+		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	if user.TotpEnabled {
+		if body.TOTPCode == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "TOTP code required"})
+			return
+		}
+		totpService := services.NewTOTPService(nil)
+		if !totpService.ValidateCode(body.TOTPCode, user.TotpSecret) {
+			pkg.LogFailedLogin(map[string]interface{}{
+				"id": user.ID, "email": user.Email, "ip": c.ClientIP(),
+			})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
+			return
+		}
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	err = h.svcUser.UpdatePassword(c.Request.Context(), userID, string(hashed))
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	err = h.svcToken.RemoveRefreshToken(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword - RemoveRefreshToken",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+	}
+
+	c.SetCookie("access_token", "", -1, "/", domain, false, true)
+	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+}

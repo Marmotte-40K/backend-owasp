@@ -60,6 +60,7 @@ func main() {
 	protected := v1.Group("/")
 	protected.Use(middleware.JWTAuthMiddleware())
 	protected.GET("/auth/@me", authHandler.Me)
+	protected.POST("/auth/change-password", authHandler.ChangePassword)
 	routes.AddUserRoutes(protected, totpHandler, sensitiveDataHandler)
 
 	router.Run()

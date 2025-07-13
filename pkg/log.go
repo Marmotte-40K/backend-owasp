@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-var SensitiveKeys = []string{"password", "token", "iban", "fiscal_code", "totp_code", "manual_entry_key", "secret"}
+var SensitiveKeys = []string{"password", "token", "iban", "fiscal_code", "totp_code", "manual_entry_key", "secret", "new_password", "old_password"}
 
 func MaskSensitiveData(data map[string]interface{}) map[string]interface{} {
 	masked := make(map[string]interface{})
