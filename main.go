@@ -46,6 +46,9 @@ func main() {
 	totpHandler := handlers.NewTOTPHandler(totpService, userService)
 	sensitiveDataHandler := handlers.NewSensitiveDataHandler(sensitiveDataService)
 
+
+	router.Use(middleware.CORSMiddleware())
+
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Service online",
