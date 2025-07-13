@@ -78,6 +78,15 @@ func (h *SensitiveDataHandler) SaveOrUpdate(c *gin.Context) {
 		return
 	}
 
+	if body.IBAN != nil {
+		sanitized := pkg.StripHTMLTags(*body.IBAN)
+		body.IBAN = &sanitized
+	}
+	if body.FiscalCode != nil {
+		sanitized := pkg.StripHTMLTags(*body.FiscalCode)
+		body.FiscalCode = &sanitized
+	}
+
 	if body.IBAN == nil && body.FiscalCode == nil {
 		pkg.LogError(
 			"SaveOrUpdateSensitiveData",

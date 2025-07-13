@@ -315,6 +315,23 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
+	body.Name = pkg.StripHTMLTags(body.Name)
+	body.Surname = pkg.StripHTMLTags(body.Surname)
+	body.Email = pkg.StripHTMLTags(body.Email)
+
+	if len(body.Name) < 2 || len(body.Name) > 50 || len(body.Surname) < 2 || len(body.Surname) > 100 {
+		pkg.LogError(
+			"Register",
+			nil,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name or surname length is invalid"})
+		return
+	}
+
 	hashed, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
 	if err != nil {
 		pkg.LogError(
