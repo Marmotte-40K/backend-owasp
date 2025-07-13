@@ -285,8 +285,8 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
-	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
+	c.SetCookie("access_token", token, int(time.Until(expToken).Seconds()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(time.Until(expRefresh).Seconds()), "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
 }
@@ -388,8 +388,8 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
-	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
+	c.SetCookie("access_token", token, int(time.Until(expToken).Seconds()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(time.Until(expRefresh).Seconds()), "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
 }
