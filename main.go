@@ -8,6 +8,7 @@ import (
 	"os"
 
 	"github.com/Marmotte-40K/backend-owasp/handlers"
+	"github.com/Marmotte-40K/backend-owasp/middleware"
 	"github.com/Marmotte-40K/backend-owasp/routes"
 	"github.com/Marmotte-40K/backend-owasp/services"
 	"github.com/gin-gonic/gin"
@@ -40,8 +41,12 @@ func main() {
 	userService := services.NewUserService(pool)
 	tokenService := services.NewTokenService(pool)
 	totpService := services.NewTOTPService(pool)
+	sensitiveDataService := services.NewSensitiveDataService(pool)
 	authHandler := handlers.NewAuthHandler(userService, tokenService)
 	totpHandler := handlers.NewTOTPHandler(totpService, userService)
+	sensitiveDataHandler := handlers.NewSensitiveDataHandler(sensitiveDataService)
+
+	router.Use(middleware.CORSMiddleware())
 
 	router.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -50,8 +55,14 @@ func main() {
 	})
 
 	v1 := router.Group("/v1")
+	v1.Use(middleware.LogRequestResponse())
 	routes.AddAuthRoutes(v1, authHandler)
-	routes.AddUserRoutes(v1, totpHandler)
+	protected := v1.Group("/")
+	protected.Use(middleware.JWTAuthMiddleware())
+	protected.GET("/auth/@me", authHandler.Me)
+	protected.POST("/auth/change-password", authHandler.ChangePassword)
+	protected.POST("/auth/2fa/setup", authHandler.Set2FAMethod)
+	routes.AddUserRoutes(protected, totpHandler, sensitiveDataHandler)
 
 	router.Run()
 }

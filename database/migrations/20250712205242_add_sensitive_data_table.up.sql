@@ -1,0 +1,6 @@
+CREATE TABLE sensitive_data (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE UNIQUE,
+    iban VARCHAR NULL UNIQUE,
+    fiscal_code VARCHAR NULL UNIQUE
+);

@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/Marmotte-40K/backend-owasp/models"
@@ -36,6 +38,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var body loginBody
 
 	if err := c.ShouldBindJSON(&body); err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid"})
 		return
 	}
@@ -43,6 +53,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	user, err := h.svcUser.GetUserByEmail(c.Request.Context(), body.Email)
 
 	if err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -54,11 +72,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.Password)); err != nil {
 		if err == bcrypt.ErrMismatchedHashAndPassword {
+			pkg.LogFailedLogin(
+				map[string]interface{}{
+					"id":    user.ID,
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
 			user.FailedLoginAttempts++
 			if user.FailedLoginAttempts >= 5 {
 				lockUntil := time.Now().Add(10 * time.Minute)
 				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, &lockUntil)
 				if err != nil {
+					pkg.LogError(
+						"Login",
+						err,
+						map[string]interface{}{
+							"id":    user.ID,
+							"email": body.Email,
+							"ip":    c.ClientIP(),
+						},
+					)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
@@ -67,6 +101,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			} else {
 				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, nil)
 				if err != nil {
+					pkg.LogError(
+						"Login",
+						err,
+						map[string]interface{}{
+							"id":    user.ID,
+							"email": body.Email,
+							"ip":    c.ClientIP(),
+						},
+					)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
@@ -74,23 +117,56 @@ func (h *AuthHandler) Login(c *gin.Context) {
 				return
 			}
 		}
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	if user.TotpEnabled {
 		if body.TOTPCode == "" {
+			pkg.LogError(
+				"TOTP Required",
+				nil,
+				map[string]interface{}{
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "TOTP code required", "totp_required": true})
 			return
 		}
 
 		totpService := services.NewTOTPService(nil)
 		if !totpService.ValidateCode(body.TOTPCode, user.TotpSecret) {
+			pkg.LogFailedLogin(
+				map[string]interface{}{
+					"id":    user.ID,
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
 			user.FailedLoginAttempts++
 			if user.FailedLoginAttempts >= 5 {
 				lockUntil := time.Now().Add(10 * time.Minute)
 				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, &lockUntil)
 				if err != nil {
+					pkg.LogError(
+						"TOTP Validation Error",
+						err,
+						map[string]interface{}{
+							"id":    user.ID,
+							"email": body.Email,
+							"ip":    c.ClientIP(),
+						},
+					)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
@@ -99,6 +175,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			} else {
 				err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, user.FailedLoginAttempts, nil)
 				if err != nil {
+					pkg.LogError(
+						"TOTP Validation Error",
+						err,
+						map[string]interface{}{
+							"id":    user.ID,
+							"email": body.Email,
+							"ip":    c.ClientIP(),
+						},
+					)
 					c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 					return
 				}
@@ -106,16 +191,52 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
 			return
 		}
+	} else if user.TwoFAMethod == "email" {
+		if body.TOTPCode == "" {
+			pkg.LogError(
+				"Email 2FA Required",
+				nil,
+				map[string]interface{}{
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Email 2FA code required", "2fa_required": true})
+			return
+		}
+		// mock: accept "123456" as valid
+		if body.TOTPCode != "123456" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid 2FA code"})
+			return
+		}
 	}
 
 	err = h.svcUser.UpdateFailedAttemptsAndLock(c.Request.Context(), user.ID, 0, nil)
 	if err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), user.ID)
 	if err != nil && err.Error() != "no rows in result set" {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -123,6 +244,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	if dbToken != "" {
 		err = h.svcToken.RemoveRefreshToken(c.Request.Context(), user.ID)
 		if err != nil {
+			pkg.LogError(
+				"Login",
+				err,
+				map[string]interface{}{
+					"id":    user.ID,
+					"email": body.Email,
+					"ip":    c.ClientIP(),
+				},
+			)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 			return
 		}
@@ -131,6 +261,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	expToken := time.Now().Add(15 * time.Minute)
 	token, err := pkg.CreateToken(user.ID, expToken.Unix())
 	if err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -138,18 +277,36 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	err = h.svcToken.AddRefreshToken(c.Request.Context(), user.ID, refreshToken, expRefresh)
 	if err != nil {
+		pkg.LogError(
+			"Login",
+			err,
+			map[string]interface{}{
+				"id":    user.ID,
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
-	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
+	c.SetCookie("access_token", token, int(time.Until(expToken).Seconds()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(time.Until(expRefresh).Seconds()), "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Login successful"})
 }
@@ -165,18 +322,60 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	var body registerBody
 
 	if err := c.ShouldBindJSON(&body); err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
+
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+
+	body.Name = pkg.StripHTMLTags(body.Name)
+	body.Surname = pkg.StripHTMLTags(body.Surname)
+	body.Email = pkg.StripHTMLTags(body.Email)
+
+	if len(body.Name) < 2 || len(body.Name) > 50 || len(body.Surname) < 2 || len(body.Surname) > 100 {
+		pkg.LogError(
+			"Register",
+			nil,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name or surname length is invalid"})
 		return
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(body.Password), bcrypt.DefaultCost)
 	if err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	user, err := h.svcUser.CreateUser(c, &models.User{Name: body.Name, Surname: body.Surname, Email: body.Email, Password: string(hashed)})
 	if err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -184,6 +383,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	expToken := time.Now().Add(15 * time.Minute)
 	token, err := pkg.CreateToken(user.ID, expToken.Unix())
 	if err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -192,18 +399,34 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	refreshToken, err := pkg.CreateToken(user.ID, expRefresh.Unix())
 	if err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
 	err = h.svcToken.AddRefreshToken(c.Request.Context(), user.ID, refreshToken, expRefresh)
 	if err != nil {
+		pkg.LogError(
+			"Register",
+			err,
+			map[string]interface{}{
+				"email": body.Email,
+				"ip":    c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
 
-	c.SetCookie("access_token", token, int(expToken.Second()), "/", domain, false, true)
-	c.SetCookie("refresh_token", refreshToken, int(expRefresh.Second()), "/", domain, false, true)
+	c.SetCookie("access_token", token, int(time.Until(expToken).Seconds()), "/", domain, false, true)
+	c.SetCookie("refresh_token", refreshToken, int(time.Until(expRefresh).Seconds()), "/", domain, false, true)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Registration successful"})
 }
@@ -211,24 +434,53 @@ func (h *AuthHandler) Register(c *gin.Context) {
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
+		pkg.LogError(
+			"Refresh Token",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 		return
 	}
 
 	err = pkg.ValidateToken(refreshToken)
 	if err != nil {
+		pkg.LogError(
+			"Refresh Token",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
 	userID, err := pkg.GetUserIDFromToken(refreshToken)
 	if err != nil {
+		pkg.LogError(
+			"Refresh Token",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
 	dbToken, err := h.svcToken.GetRefreshToken(c.Request.Context(), userID)
 	if err != nil {
+		pkg.LogError(
+			"Refresh Token",
+			err,
+			map[string]interface{}{
+				"id": userID,
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -241,6 +493,14 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	expToken := time.Now().Add(15 * time.Minute)
 	newToken, err := pkg.CreateToken(int64(userID), expToken.Unix())
 	if err != nil {
+		pkg.LogError(
+			"Refresh Token",
+			err,
+			map[string]interface{}{
+				"id": userID,
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -253,18 +513,40 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 func (h *AuthHandler) Logout(c *gin.Context) {
 	refreshToken, err := c.Cookie("refresh_token")
 	if err != nil {
+		pkg.LogError(
+			"Logout",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
 		return
 	}
 
 	userID, err := pkg.GetUserIDFromToken(refreshToken)
 	if err != nil {
+		pkg.LogError(
+			"Logout",
+			err,
+			map[string]interface{}{
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid refresh token"})
 		return
 	}
 
 	err = h.svcToken.RemoveRefreshToken(c.Request.Context(), userID)
 	if err != nil {
+		pkg.LogError(
+			"Logout",
+			err,
+			map[string]interface{}{
+				"id": userID,
+				"ip": c.ClientIP(),
+			},
+		)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
 		return
 	}
@@ -275,4 +557,166 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logout successful",
 	})
+}
+
+func (h *AuthHandler) Me(c *gin.Context) {
+	tokenString, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userID, err := pkg.GetUserIDFromToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+	user, err := h.svcUser.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"Get User",
+			err,
+			map[string]interface{}{
+				"id": userID,
+				"ip": c.ClientIP(),
+			},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	c.JSON(200, gin.H{
+		"id":           user.ID,
+		"name":         user.Name,
+		"surname":      user.Surname,
+		"email":        user.Email,
+		"totp_enabled": user.TotpEnabled,
+	})
+}
+
+type changePasswordBody struct {
+	OldPassword string `json:"old_password" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+	TOTPCode    string `json:"totp_code,omitempty"`
+}
+
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	tokenString, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userID, err := pkg.GetUserIDFromToken(tokenString)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+	user, err := h.svcUser.GetUserByID(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	var body changePasswordBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(body.OldPassword)); err != nil {
+		pkg.LogFailedLogin(map[string]interface{}{
+			"id": user.ID, "email": user.Email, "ip": c.ClientIP(),
+		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
+		return
+	}
+
+	if user.TotpEnabled {
+		if body.TOTPCode == "" {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "TOTP code required"})
+			return
+		}
+		totpService := services.NewTOTPService(nil)
+		if !totpService.ValidateCode(body.TOTPCode, user.TotpSecret) {
+			pkg.LogFailedLogin(map[string]interface{}{
+				"id": user.ID, "email": user.Email, "ip": c.ClientIP(),
+			})
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid TOTP code"})
+			return
+		}
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(body.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+	err = h.svcUser.UpdatePassword(c.Request.Context(), userID, string(hashed))
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+		return
+	}
+
+	err = h.svcToken.RemoveRefreshToken(c.Request.Context(), userID)
+	if err != nil {
+		pkg.LogError(
+			"ChangePassword - RemoveRefreshToken",
+			err,
+			map[string]interface{}{"id": userID, "ip": c.ClientIP()},
+		)
+	}
+
+	c.SetCookie("access_token", "", -1, "/", domain, false, true)
+	c.SetCookie("refresh_token", "", -1, "/", domain, false, true)
+
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully"})
+}
+
+func (h *AuthHandler) Set2FAMethod(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, _ := strconv.ParseInt(userIDStr, 10, 64)
+
+	access_token, err := c.Cookie("access_token")
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
+		return
+	}
+	userIDFromToken, err := pkg.GetUserIDFromToken(access_token)
+
+	if err != nil || userIDFromToken != userID {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	var req struct{ Method string }
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "bad request"})
+		return
+	}
+	// mock: skip actual 2FA setup
+	fmt.Printf("Set 2FA method for user %d to %s\n", userID, req.Method)
+	c.JSON(200, gin.H{"message": "2FA method updated"})
 }

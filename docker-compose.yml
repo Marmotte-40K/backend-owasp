@@ -29,6 +29,8 @@ services:
         condition: service_healthy 
     networks:
       - default
+    volumes:
+      - ./logs:/app/logs
 
 networks:
   default:

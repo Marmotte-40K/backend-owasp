@@ -5,11 +5,15 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func AddUserRoutes(rg *gin.RouterGroup, h *handlers.TOTPHandler) {
+func AddUserRoutes(rg *gin.RouterGroup, hTotp *handlers.TOTPHandler, hSD *handlers.SensitiveDataHandler) {
 	users := rg.Group("/users")
 
-	users.GET("/:user_id/totp/qr", h.GetQRCode)
-	users.POST("/:user_id/totp/enable", h.EnableTOTP)
-	users.POST("/:user_id/totp/disable", h.DisableTOTP)
-	users.POST("/:user_id/totp/verify", h.VerifyTOTP)
+	users.GET("/:user_id/totp/qr", hTotp.GetQRCode)
+	users.POST("/:user_id/totp/enable", hTotp.EnableTOTP)
+	users.POST("/:user_id/totp/disable", hTotp.DisableTOTP)
+	users.POST("/:user_id/totp/verify", hTotp.VerifyTOTP)
+
+	users.POST("/:user_id/sensitive", hSD.SaveOrUpdate)
+	users.PUT("/:user_id/sensitive", hSD.SaveOrUpdate)
+	users.GET("/:user_id/sensitive", hSD.Get)
 }
