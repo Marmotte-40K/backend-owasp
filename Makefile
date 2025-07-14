@@ -11,11 +11,11 @@ create_migration:
 
 run_migrations:
 	@echo "Running migrations..."
-	migrate -path database/migrations -database "postgres://$${DB_USER}:$${DB_PASSWORD}@$${DB_HOST}:$${DB_PORT}/$${DB_DATABASE}?sslmode=disable" up && \
+	migrate -path database/migrations -database "postgres://$${DB_USER}:$${DB_PASSWORD}@$${DB_HOST}:$${DB_PORT}/$${DB_DATABASE}?sslmode=require" up && \
 	echo "Migrations ran successfully"
 
 migrate_down:
 	@echo "Rolling back last migration..."
-	migrate -path database/migrations -database "postgres://$${DB_USER}:$${DB_PASSWORD}@$${DB_HOST}:$${DB_PORT}/$${DB_DATABASE}?sslmode=disable" down && \
+	migrate -path database/migrations -database "postgres://$${DB_USER}:$${DB_PASSWORD}@$${DB_HOST}:$${DB_PORT}/$${DB_DATABASE}?sslmode=require" down && \
 	echo "Migration rolled back successfully"
 	
